@@ -69,7 +69,8 @@ def update_power(id):
     if "description" in data:
         description = data["description"]
         if len(description) < 20:
-            return make_response(jsonify({"errors": ["Description must be at least 20 characters long"]}), 400)
+            return make_response(jsonify({
+                "errors": ["validation errors"]}), 400)
 
         power.description = description
         db.session.commit()
@@ -81,42 +82,39 @@ def update_power(id):
 
 @app.route('/hero_powers', methods=['POST'])
 def create_hero_power():
-    data = request.get_json()
+    data = request.json
 
     strength = data.get('strength')
-    power_id = data.get('power_id')
+    if strength not in ["Strong", "Weak", "Average"]:
+        return jsonify({'errors': ["validation errors"]}), 400
+
     hero_id = data.get('hero_id')
+    power_id = data.get('power_id')
 
-    allowed_strengths = ['Strong', 'Weak', 'Average']
-    if strength not in allowed_strengths:
-        return make_response(jsonify({"errors": ["Strength must be one of: 'Strong', 'Weak', 'Average'"]}), 400)
+    if not Hero.query.get(hero_id):
+        return jsonify({'errors': ["Hero not found"]}), 404
+    if not Power.query.get(power_id):
+        return jsonify({'errors': ["Power not found"]}), 404
 
-    hero = Hero.query.filter_by(id=hero_id).first()
-    power = Power.query.filter_by(id=power_id).first()
+    hero_power = HeroPower(
+        hero_id=hero_id,
+        power_id=power_id,
+        strength=strength
+    )
 
-    if not hero or not power:
-        return make_response(jsonify({"errors": ["Hero or Power not found"]}), 404)
+    db.session.add(hero_power)
+    db.session.commit()
 
-    hero_power = HeroPower(strength=strength, hero_id=hero_id, power_id=power_id)
-
-    try:
-        db.session.add(hero_power)
-        db.session.commit()
-    except Exception as e:
-        db.session.rollback()
-        return make_response(jsonify({"errors": ["Failed to create HeroPower"]}), 400)
-
-    # Return the new HeroPower data
-    response_data = {
-        "id": hero_power.id,
-        "hero_id": hero.id,
-        "power_id": power.id,
-        "strength": hero_power.strength,
-        "hero": hero.to_dict(),
-        "power": power.to_dict()
+    response = {
+        'id': hero_power.id,
+        'hero_id': hero_power.hero_id,
+        'power_id': hero_power.power_id,
+        'strength': hero_power.strength,
+        'hero': Hero.query.get(hero_power.hero_id).name,
+        'power': Power.query.get(hero_power.power_id).name
     }
 
-    return make_response(jsonify(response_data), 201)
+    return jsonify(response), 200
 
 if __name__ == '__main__':
     app.run(port=5555, debug=True)
